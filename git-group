@@ -1,0 +1,90 @@
+#!/bin/bash
+# TODO: Document 
+
+usage="usage: git group [-h] [-v] [-m branch_msg ] [-n branch_name] exclusive_commit"
+n_required=1
+positional=()
+
+while [[ $# -gt 0 ]]
+do
+	key="$1"
+	case $key in
+			-h|--help)
+			helpmsg=true
+			shift
+		;;
+		-v|--verbose)
+			verbose=true
+			shift
+		;;
+		-m|--message)
+			msg="$2"
+			shift 2 # past argument+value
+		;;
+		-n|--name)
+			name="$2"
+			shift 2 # past argument+value
+		;;
+		*)
+			positional+=("$1") # save unknown option as a positional arg
+			shift
+		;;
+	esac
+done
+
+set -- "${positional[@]}" # restore positional parameters
+
+function display_args() {
+	echo "arguments:"
+	echo "\tmsg: ${msg}"
+	echo "\thelp: ${helpmsg}"
+	echo "\tverbose: ${verbose}"
+	echo "\tpositional: ${positional[@]}"
+}
+
+function display_help() {
+	echo "$usage"
+	echo "-h|--help				displays this help message and exits"
+	echo "-v|--verbose			displays more info"
+	echo "-m|--message message	appends a message to the merge commit"
+	echo "-n|--name branch_name	sets the branch name used, otherwise set to temp_branch"
+	echo "exclusive_commit		SHA1 Hash to select range (exclusive_commit:HEAD~0]"
+}
+
+if [[ ${helpmsg} ]]; then
+	display_help
+	exit 0
+fi
+
+if [[ ${#positional[@]} -lt ${n_required} ]]; then
+	echo "$usage"
+	exit 0
+fi
+
+# positional arguments
+exclusive_commit=${positional[0]}
+
+# filter out the current branch from the list of branches
+cur_branch=`git branch | grep \* | cut -d ' ' -f2`
+
+# save current changes
+git stash
+
+# extract the commit range into its own branch
+git checkout -b git-group-branch
+git checkout ${cur_branch}
+git reset --hard ${exclusive_commit}
+
+# merge with the recursive strategy insteda of fast-forward to preserve grouping
+# and replace default message with helpful group message
+git merge --no-edit --no-ff git-group-branch -m "${msg}"
+
+# delete temporary branch
+git branch -d git-group-branch
+
+# restore changes
+git stash pop
+
+
+
+
